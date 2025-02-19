@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agallo - TikTok Clone</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            color: #fff;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .content {
+            height: calc(100vh - 80px);
+            flex: 1;
+            overflow-y: scroll;
+            scroll-snap-type: y mandatory;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .post {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            scroll-snap-align: start;
+        }
+
+        .post video, .post img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: 100%;
+        }
+
+        .vertical-icons {
+            position: absolute;
+            right: 15px;
+            bottom: 20%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .vertical-icons div {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            color: #fff;
+            background-color: rgba(0, 0, 0, 0.6);
+            padding: 10px;
+            border-radius: 50%;
+        }
+
+        .comment-section {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 70%;
+            height: 60vh;
+            background: rgba(0, 0, 0, 0.8);
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 20px;
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+        }
+
+        .comments {
+            max-height: 80vh;
+            overflow-y: auto;
+            background: #222;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 10px;
+        }
+
+        .comment {
+            background: #333;
+            padding: 10px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+        }
+
+        .comment-form {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .comment-input {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            background-color: #333;
+            color: #fff;
+        }
+
+        .comment-button {
+            background: green;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .close-btn {
+            background: red;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            position: absolute;
+            top: 20px;
+            right: 20px;
+        }
+        .liked i {
+            color: #00ff00; /* Green heart */
+        }
+
+        .upload-container {
+            bottom: 20px;
+            width: 100%;
+            text-align: center;
+            z-index: 10;
+        }
+
+        .upload-btn {
+            z-index: 10;
+            background-color: #00ff00;
+            border: none;
+            color: #fff;
+            font-size: 16px;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+        }
+
+        .upload-btn:hover {
+            background-color: #00cc00;
+        }
+
+
+    </style>
+</head>
+<body>
+
+<div class="content" id="content"></div>
+
+<div class="upload-container">
+    <label for="media-upload" class="upload-btn">Upload Media</label>
+    <input type="file" id="media-upload" accept="image/*,video/*" style="display: none;">
+</div>
+
+<!-- Comment Section -->
+<div class="comment-section" id="commentSection">
+    <button class="close-btn" onclick="closeComments()">Close</button>
+    <div class="comments" id="comments"></div>
+    <form class="comment-form" id="commentForm">
+        <input type="text" id="commentInput" class="comment-input" placeholder="Add a comment..." required>
+        <button type="submit" class="comment-button">Post</button>
+    </form>
+</div>
+
+<script>
+const backendUrl = "http://localhost:3000";
+let currentPostId = null;
+
+// Fetch posts from the server
+async function fetchPosts() {
+    try {
+        const response = await fetch(`${backendUrl}/api/posts`);
+        const posts = await response.json();
+        const content = document.getElementById("content");
+        content.innerHTML = '';
+
+        posts.forEach(post => {
+            const postElement = document.createElement("div");
+            postElement.className = "post";
+            let media;
+
+            if (post.type === "image") {
+                media = document.createElement("img");
+                media.src = backendUrl + post.url;
+            } else {
+                media = document.createElement("video");
+                media.src = backendUrl + post.url;
+                media.autoplay = true;
+                media.loop = true;
+                media.controls = false;
+                media.muted = true;
+            }
+
+            postElement.appendChild(media);
+
+            const icons = document.createElement("div");
+            icons.className = "vertical-icons";
+            icons.innerHTML = `
+                <div class="like" onclick="toggleLike('${post.id}', this, ${post.userLiked})">
+                    <i>&#x2764;</i><span>${post.likes}</span>
+                </div>
+                <div class="comment" onclick="openComments('${post.id}')">
+                    <i>&#x1F4AC;</i><span>${post.comments}</span>
+                </div>
+                <div class="download" onclick="downloadMedia('${backendUrl}${post.url}')">
+                    <i>VOLUME</i>
+                </div>
+            `;
+            postElement.appendChild(icons);
+            content.appendChild(postElement);
+        });
+
+        updateVideos();
+    } catch (error) {
+        console.error("Error fetching posts:", error);
+    }
+}
+
+function updateVideos() {
+    const posts = document.querySelectorAll(".post video");
+    window.addEventListener("scroll", () => {
+        posts.forEach(video => {
+            const rect = video.getBoundingClientRect();
+            if (rect.top >= 0 && rect.bottom <= window.innerHeight) {
+                if (video.paused) video.play();
+            } else {
+                if (!video.paused) video.pause();
+            }
+        });
+    });
+}
+
+async function toggleLike(postId, element, userLiked) {
+    // Prevent user from liking more than once
+    if (userLiked) {
+        alert("You have already liked this post.");
+        return;
+    }
+
+    try {
+        const response = await fetch(`${backendUrl}/api/posts/${postId}/like`, { method: "POST" });
+        const data = await response.json();
+        
+        // Add the 'liked' class to change the like button's appearance
+        element.classList.add("liked");
+        element.querySelector("span").textContent = data.likes;
+
+        // Update the post to reflect that the user has liked it
+        userLiked = true;
+    } catch (error) {
+        console.error("Error liking post:", error);
+    }
+}
+
+function openComments(postId) {
+    currentPostId = postId;
+    document.getElementById("commentSection").style.display = "flex";
+    fetchComments(postId);
+}
+
+async function fetchComments(postId) {
+    try {
+        const response = await fetch(`${backendUrl}/api/posts/${postId}/comments`);
+        const comments = await response.json();
+        const commentsContainer = document.getElementById("comments");
+        commentsContainer.innerHTML = '';
+
+        comments.forEach(comment => {
+            const commentElement = document.createElement("div");
+            commentElement.classList.add("comment");
+            commentElement.innerHTML = comment.text;
+            commentsContainer.appendChild(commentElement);
+        });
+    } catch (error) {
+        console.error("Error fetching comments:", error);
+    }
+}
+
+document.getElementById("commentForm").addEventListener("submit", async function(event) {
+    event.preventDefault();
+    const commentInput = document.getElementById("commentInput");
+    const commentText = commentInput.value.trim();
+    if (!commentText || !currentPostId) return;
+
+    try {
+        await fetch(`${backendUrl}/api/posts/${currentPostId}/comment`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: commentText }),
+        });
+
+        commentInput.value = "";
+        fetchComments(currentPostId); // Fetch comments after posting a new one
+    } catch (error) {
+        console.error("Error posting comment:", error);
+    }
+});
+
+function closeComments() {
+    document.getElementById("commentSection").style.display = "none";
+}
+
+function downloadMedia(url) {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = url.split('/').pop();
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+document.getElementById("media-upload").addEventListener("change", async function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+        await fetch(`${backendUrl}/api/upload`, { method: "POST", body: formData });
+        fetchPosts();
+    } catch (error) {
+        console.error("Upload failed:", error);
+    }
+});
+
+document.addEventListener("DOMContentLoaded", fetchPosts);
+</script>
+
+</body>
+</html>
