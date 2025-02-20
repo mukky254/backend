@@ -11,7 +11,7 @@ const port = process.env.PORT || 3000;  // Use port from environment variable or
 
 // CORS setup - Allow multiple origins
 const allowedOrigins = [   // This might also be used
-  "https://mukky254.github.io/life/", 
+  "https://mukky254.github.io/IBM/", 
   "https://mukky254.github.io/life/",
   "http://127.0.0.1:5500",
 ];
