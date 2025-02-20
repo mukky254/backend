@@ -10,15 +10,15 @@ const app = express();
 const port = process.env.PORT || 3000;  // Use port from environment variable or default to 3000
 
 // CORS setup - Allow multiple origins
-const allowedOrigins = [   // This might also be used
+const allowedOrigins = [
   "https://mukky254.github.io/IBM/", 
   "https://mukky254.github.io/life/",
   "http://127.0.0.1:5500",
+  "http://localhost:3000/",
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
-    // If the origin is in the allowedOrigins array or is undefined (for localhost), allow it
     if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
       callback(null, true);
     } else {
@@ -171,6 +171,39 @@ app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: "Something went wrong!" });
 });
+
+// Function to create tables
+async function createTables() {
+  const createPostsTable = `
+    CREATE TABLE IF NOT EXISTS posts (
+      id SERIAL PRIMARY KEY,
+      url TEXT NOT NULL,
+      type TEXT,
+      likes INT DEFAULT 0,
+      comments INT DEFAULT 0
+    );
+  `;
+  
+  const createCommentsTable = `
+    CREATE TABLE IF NOT EXISTS comments (
+      id SERIAL PRIMARY KEY,
+      post_id INT REFERENCES posts(id) ON DELETE CASCADE,
+      text TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `;
+  
+  try {
+    await pool.query(createPostsTable);
+    await pool.query(createCommentsTable);
+    console.log("Tables created successfully");
+  } catch (err) {
+    console.error("Error creating tables:", err);
+  }
+}
+
+// Call the function to create tables (this is typically called once when the app starts)
+createTables();
 
 // Start the server
 app.listen(port, () => {
