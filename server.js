@@ -14,6 +14,7 @@ const allowedOrigins = [   // This might also be used
   "https://mukky254.github.io/IBM/", 
   "https://mukky254.github.io/life/",
   "http://127.0.0.1:5500",
+  "https://backend-2-i1oi.onrender.com",
 ];
 
 app.use(cors({
