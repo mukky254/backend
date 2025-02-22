@@ -5,21 +5,21 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const cors = require("cors");
-
+const cloudinary = require('cloudinary').v2;
 const app = express();
-const port = process.env.PORT || 3000;  // Use port from environment variable or default to 3000
+const port = process.env.PORT || 3000;
 
 // CORS setup - Allow multiple origins
-const allowedOrigins = [   // This might also be used
-  "https://mukky254.github.io/IBM/", 
+const allowedOrigins = [
+  "https://mukky254.github.io/IBM/",
   "https://mukky254.github.io/life/",
   "http://127.0.0.1:5500",
   "https://backend-2-i1oi.onrender.com",
+  "http://127.0.0.1:5500/public/index.html",
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
-    // If the origin is in the allowedOrigins array or is undefined (for localhost), allow it
     if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
       callback(null, true);
     } else {
@@ -37,34 +37,21 @@ const pool = new Pool({
   port: process.env.DB_PORT,
 });
 
-// Ensure upload directory exists
-const uploadDir = path.join(__dirname, "uploads");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
-}
-
-// File storage setup using multer
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir); // Save the uploaded files to the 'uploads' folder
-  },
-  filename: (req, file, cb) => {
-    const fileExtension = path.extname(file.originalname).toLowerCase();
-    cb(null, `${Date.now()}${fileExtension}`); // Name the file with timestamp to avoid overwriting
-  },
+// Cloudinary configuration
+cloudinary.config({
+  cloud_name: process.env.CLOUD_NAME,
+  api_key: process.env.CLOUD_API_KEY,
+  api_secret: process.env.CLOUD_API_SECRET,
 });
 
+// File upload setup using multer (no need for diskStorage now)
 const upload = multer({
-  storage: storage,
-  limits: { fileSize: 500 * 1024 * 1024 }, // Limit file size to 50 MB (adjust as needed)
+  limits: { fileSize: 500 * 1024 * 1024 }, // 50 MB limit
   fileFilter: (req, file, cb) => {
-    // Allow all file types
-    cb(null, true); // Skip file type check
+    cb(null, true); // Accept all file types
   },
 });
 
-app.use("/uploads", express.static(uploadDir));  // Serve uploaded files statically
-app.use(express.static("public"));  // Serve static files (if any)
 app.use(express.json());  // Middleware for parsing JSON bodies
 
 // Get posts from the database
@@ -78,23 +65,27 @@ app.get("/api/posts", async (req, res) => {
   }
 });
 
-// Upload file handler
+// Upload file handler (using Cloudinary)
 app.post("/api/upload", upload.single("file"), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded" });
   }
 
-  const fileUrl = `/uploads/${req.file.filename}`;
-  const fileType = req.file.mimetype.startsWith("image") ? "image" : "video"; // You can add more logic here if you want to distinguish the file types.
-
   try {
-    await pool.query(
-      "INSERT INTO posts (url, type, likes, comments) VALUES ($1, $2, 0, 0)",
-      [fileUrl, fileType]
+    // Upload the file to Cloudinary
+    const result = await cloudinary.uploader.upload(req.file.path, {
+      resource_type: 'auto', // auto-detect image/video
+    });
+
+    // Save the Cloudinary URL to PostgreSQL
+    const post = await pool.query(
+      "INSERT INTO posts (url, type, likes, comments) VALUES ($1, $2, 0, 0) RETURNING *",
+      [result.secure_url, req.file.mimetype.startsWith("image") ? "image" : "video"]
     );
-    res.json({ message: "File uploaded successfully", url: fileUrl });
+
+    res.status(201).json({ message: "File uploaded successfully", post: post.rows[0] });
   } catch (err) {
-    console.error("Error uploading file:", err);
+    console.error("Error uploading file to Cloudinary:", err);
     res.status(500).json({ error: "Failed to upload file" });
   }
 });
@@ -121,7 +112,7 @@ app.post("/api/posts/:id/like", async (req, res) => {
 // Comment on a post
 app.post("/api/posts/:id/comment", async (req, res) => {
   const postId = req.params.id;
-  const { text } = req.body;  // Get the comment text from the request body
+  const { text } = req.body;
 
   if (!text) {
     return res.status(400).json({ error: "Comment text is required" });
