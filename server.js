@@ -7,7 +7,7 @@ const fs = require("fs");
 const cors = require("cors");
 
 const app = express();
-const port = process.env.PORT || 5432;  // Use port from environment variable or default to 3000
+const port = process.env.PORT || 3000;  // Use port from environment variable or default to 3000
 
 // CORS setup - Allow multiple origins
 const allowedOrigins = [   // This might also be used
